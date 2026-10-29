@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_path() {
+  local path="$1"
+  while [ -L "$path" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$path")" && pwd)"
+    path="$(readlink "$path")"
+    [[ "$path" != /* ]] && path="$dir/$path"
+  done
+  cd -P "$(dirname "$path")" && pwd
+}
+
+XYSTACK_ROOT="$(cd "$(resolve_path "${BASH_SOURCE[0]}")/.." && pwd)"
+export XYSTACK_ROOT
+
+source "$XYSTACK_ROOT/lib/common.sh"
+source "$XYSTACK_ROOT/lib/commands/skills.sh"
+
+xystack_help() {
+  cat <<HELP
+Usage: xystack <command> [options]
+
+Commands:
+  skills                  Manage skills
+
+Options:
+  -h, --help              Show this help
+
+Run 'xystack <command> --help' for more information on a command.
+
+All commands:
+  xystack skills install        Install skills, skipping installed ones (alias: i)
+  xystack skills clean-install  Install skills, replacing installed ones (alias: ci)
+HELP
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    "" | -h | --help) xystack_help ;;
+    skills) shift; skills_main "$@" ;;
+    *) die "unknown command '$cmd'. Run 'xystack --help'." ;;
+  esac
+}
+
+main "$@"
