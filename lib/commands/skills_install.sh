@@ -33,7 +33,10 @@ HELP
 find_skills() {
   local dir="$1" entry
   if [ -f "$dir/SKILL.md" ]; then
-    echo "$dir"
+    case "${dir##*/}" in
+      *$'\n'*) die "skill names must not contain line breaks: $(printf '%q' "$dir")" ;;
+    esac
+    found_skills+=("$dir")
     return
   fi
   for entry in "$dir"/*/; do
@@ -81,17 +84,15 @@ skills_install_run() {
   local source_dir="$XYSTACK_ROOT/skills"
   [ -d "$source_dir" ] || die "skills folder not found: $source_dir"
 
-  local skills=()
-  local skill
-  while IFS= read -r skill; do
-    [ -n "$skill" ] && skills+=("$skill")
-  done < <(find_skills "$source_dir")
+  local found_skills=()
+  find_skills "$source_dir"
 
-  if [ ${#skills[@]} -eq 0 ]; then
+  if [ ${#found_skills[@]} -eq 0 ]; then
     info "No skills found in $source_dir"
     return 0
   fi
 
+  local skills=("${found_skills[@]}") skill
   local names
   names="$(for skill in "${skills[@]}"; do basename "$skill"; done | sort | uniq -d)"
   [ -z "$names" ] || die "duplicate skill names: $(echo $names)"
