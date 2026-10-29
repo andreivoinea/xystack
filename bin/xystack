@@ -31,7 +31,8 @@ Options:
 Run 'xystack <command> --help' for more information on a command.
 
 All commands:
-  xystack skills install  Install skills from the xystack skills folder (alias: i)
+  xystack skills install        Install skills, skipping installed ones (alias: i)
+  xystack skills clean-install  Install skills, replacing installed ones (alias: ci)
 HELP
 }
 
