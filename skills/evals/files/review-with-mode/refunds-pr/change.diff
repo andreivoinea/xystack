@@ -1,10 +1,10 @@
 diff --git a/README.md b/README.md
-index 7c702ec..62a6cf8 100644
+index 897bf90..b2a915c 100644
 --- a/README.md
 +++ b/README.md
-@@ -10,6 +10,10 @@ Order handling for the shop backend.
- - `src/money.ts`: money parsing and formatting. Never use floating-point maths for money.
+@@ -11,6 +11,10 @@ Order handling for the shop backend.
  - `scripts/`: maintenance scripts, run from the repository root.
+ - `architecture/workspace.dsl`: the C4 model. Keep it current when you add or change components or their relationships.
  
 +## Refunds
 +

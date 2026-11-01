@@ -1,3 +1,58 @@
+diff --git a/architecture/workspace.dsl b/architecture/workspace.dsl
+index 44e56bd..3627112 100644
+--- a/architecture/workspace.dsl
++++ b/architecture/workspace.dsl
+@@ -5,15 +5,17 @@ workspace "orders-api" "Order handling for the shop backend." {
+     model {
+         customer = person "Customer" "Views their orders and applies discounts."
+         operator = person "Operator" "Runs maintenance scripts from the repository root."
++        finance = person "Finance team" "Receives the monthly orders export."
+ 
+         gateway = softwareSystem "Shop gateway" "Hosts the shop's HTTP endpoints and resolves session cookies to user IDs. Separate repository." "External"
+ 
+         orders = softwareSystem "Orders service" "Order handling for the shop backend." {
+             api = container "Orders API" "Order request handlers, loaded and called by the shop gateway. Trusts request.userId, which the gateway sets from the session." "TypeScript, Node.js" {
+-                routes = component "Routes" "src/routes.ts: maps GET /orders/:id and POST /orders/:id/discount to handlers." "TypeScript"
+-                orderHandlers = component "Order handlers" "src/handlers/orders.ts: call the order service, format totals and map errors." "TypeScript"
++                routes = component "Routes" "src/routes.ts: maps GET /orders, GET /orders/:id and POST /orders/:id/discount to handlers." "TypeScript"
++                orderHandlers = component "Order handlers" "src/handlers/orders.ts: call the order service, paginate order history, format totals and map errors." "TypeScript"
+                 errorMapping = component "Error mapping" "src/handlers/errors.ts: maps domain errors to 404 and 400, rethrows the rest." "TypeScript"
+                 orderService = component "Order service" "src/services/orders.ts: business rules for orders, including the ownership check." "TypeScript"
++                pagination = component "Pagination" "src/pagination.ts: splits lists into pages numbered from 1." "TypeScript"
+                 money = component "Money" "src/money.ts: parses decimal strings to whole cents with integer arithmetic, and formats cents." "TypeScript"
+                 storage = component "Storage" "src/db.ts: reads and writes the orders file. Only services may use it." "TypeScript"
+             }
+@@ -21,14 +23,17 @@ workspace "orders-api" "Order handling for the shop backend." {
+             data = container "Orders file" "data/orders.json (or $ORDERS_DB): orders and refunds." "JSON file" "FileStore"
+             backup = container "Backup script" "scripts/backup-db.sh: copies the data directory to a timestamped snapshot." "Bash"
+             backups = container "Backup snapshots" "backups/<UTC timestamp>/" "File system" "FileStore"
++            exportJob = container "Orders export" "scripts/export-orders.sh and scripts/export-orders.ts: write every order to a CSV file." "Bash, TypeScript"
++            exports = container "Export files" "<out-dir>/orders.csv" "CSV file" "FileStore"
+         }
+ 
+         customer -> gateway "Uses the shop through" "HTTPS"
+         gateway -> orders.api.routes "Calls order handlers with the user ID" "Function call"
+-        orders.api.routes -> orders.api.orderHandlers "Dispatches GET /orders/:id and POST /orders/:id/discount to" "In-process call"
++        orders.api.routes -> orders.api.orderHandlers "Dispatches GET /orders, GET /orders/:id and POST /orders/:id/discount to" "In-process call"
+         orders.api.orderHandlers -> orders.api.orderService "Reads and updates the user's orders through" "In-process call"
+         orders.api.orderHandlers -> orders.api.money "Formats totals with" "In-process call"
+         orders.api.orderHandlers -> orders.api.errorMapping "Maps domain errors with" "In-process call"
++        orders.api.orderHandlers -> orders.api.pagination "Paginates order history with" "In-process call"
+         orders.api.orderService -> orders.api.storage "Reads and writes orders through" "In-process call"
+         orders.api.orderService -> orders.api.money "Parses discount amounts with" "In-process call"
+         orders.api.storage -> orders.data "Reads and writes" "File system"
+@@ -36,6 +41,11 @@ workspace "orders-api" "Order handling for the shop backend." {
+         operator -> orders.backup "Runs" "Shell"
+         orders.backup -> orders.data "Reads" "cp -R"
+         orders.backup -> orders.backups "Writes timestamped snapshots to" "cp -R"
++
++        operator -> orders.exportJob "Runs monthly" "Shell"
++        orders.exportJob -> orders.data "Reads all orders through the order service" "File system"
++        orders.exportJob -> orders.exports "Replaces the previous export with" "File system"
++        finance -> orders.exports "Reads" "Spreadsheet"
+     }
+ 
+     views {
 diff --git a/scripts/export-orders.sh b/scripts/export-orders.sh
 new file mode 100755
 index 0000000..a434a3f
@@ -31,20 +86,20 @@ index 0000000..b1bd95a
 +);
 +console.log([header, ...rows].join("\n"));
 diff --git a/src/db.ts b/src/db.ts
-index c7baa99..82bf139 100644
+index 3939b2e..2038bb9 100644
 --- a/src/db.ts
 +++ b/src/db.ts
-@@ -33,6 +33,10 @@ export function updateOrder(order: Order): void {
-   orders.set(order.id, { ...order });
+@@ -58,6 +58,10 @@ export function updateOrder(order: Order): void {
+   save(data);
  }
  
 +export function listOrders(): Order[] {
-+  return [...orders.values()].map((order) => ({ ...order }));
++  return load().orders;
 +}
 +
  export function listOrdersByUser(userId: string): Order[] {
-   return [...orders.values()]
-     .filter((order) => order.userId === userId)
+   return load()
+     .orders.filter((order) => order.userId === userId)
 diff --git a/src/handlers/orders.ts b/src/handlers/orders.ts
 index 52446fb..0a80295 100644
 --- a/src/handlers/orders.ts
