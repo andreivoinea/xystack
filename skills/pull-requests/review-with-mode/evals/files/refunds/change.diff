@@ -1,0 +1,29 @@
+diff -ruN before/app/handlers/refunds.py after/app/handlers/refunds.py
+--- before/app/handlers/refunds.py
++++ after/app/handlers/refunds.py
+@@ -0,0 +1,13 @@
++from app import db
++
++
++def handle_refund(request):
++    # Check the order exists before we recieve the refund
++    order = db.find_order(request["order_id"])
++    if order is None:
++        return {"status": 404}
++    amount_cents = int(round(float(request["amount"]) * 100))
++    if amount_cents > order["total_cents"]:
++        return {"status": 400, "error": "refund exceeds order total"}
++    db.insert_refund(order["id"], amount_cents)
++    return {"status": 200}
+diff -ruN before/app/routes.py after/app/routes.py
+--- before/app/routes.py
++++ after/app/routes.py
+@@ -1,6 +1,8 @@
+ from app.handlers.orders import handle_discount
++from app.handlers.refunds import handle_refund
+ 
+ # request["user_id"] is set by the auth middleware from the session, never from the client.
+ ROUTES = {
+     "POST /orders/discount": handle_discount,
++    "POST /orders/refund": handle_refund,
+ }
