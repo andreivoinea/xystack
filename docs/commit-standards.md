@@ -3,7 +3,7 @@
 Commit messages in this repository follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification), with two changes:
 
 1. The allowed types also include the ones from [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional).
-2. Breaking changes use the `BREAKING CHANGE` type. The `!` marker and the `BREAKING CHANGE:` footer are not used.
+2. Breaking changes use the `BREAKING CHANGE` type and require a body. The `!` marker and the `BREAKING CHANGE:` footer are not used.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt).
 
@@ -12,7 +12,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 ```
 <type>[optional scope]: <description>
 
-[optional body]
+[optional body, required for BREAKING CHANGE]
 
 [optional footer(s)]
 ```
@@ -47,7 +47,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 9. A footer's token MUST use `-` in place of whitespace characters, e.g., `Acked-by` (this helps differentiate the footer section from a multi-paragraph body).
 10. A footer's value MAY contain spaces and newlines, and parsing MUST terminate when the next valid footer token/separator pair is observed.
 11. Breaking changes MUST use the `BREAKING CHANGE` type, e.g., `BREAKING CHANGE(api): remove v1 endpoints`. This applies whatever else the change does: a breaking feature, fix, refactor, or any other change uses `BREAKING CHANGE`, not its usual type.
-12. A `BREAKING CHANGE` commit SHOULD include a body that describes what breaks and how to migrate.
+12. A `BREAKING CHANGE` commit MUST include a body that describes what breaks and how to migrate.
 13. Commits MUST NOT use `!` after the type or scope.
 14. Commits MUST NOT use a `BREAKING CHANGE` or `BREAKING-CHANGE` footer.
 15. Types other than those listed above MUST NOT be used.
@@ -55,35 +55,4 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## Examples
 
-A feature with a scope:
-
-```
-feat(skills): add review-with-mode skill
-```
-
-Documentation only:
-
-```
-docs: add commit standards
-```
-
-A breaking change with a body:
-
-```
-BREAKING CHANGE(installer): rename skills install command to skills add
-
-The `xystack skills install` command is now `xystack skills add`.
-Update any scripts that call the old name.
-```
-
-A revert with a footer:
-
-```
-revert: let us never again speak of the noodle incident
-
-Refs: 676104e, a215868
-```
-
-## Tooling note
-
-`@commitlint/config-conventional` rejects the `BREAKING CHANGE` type, because its type must be a lowercase word from its list. If commitlint is added to this repository, extend its `type-enum` with `BREAKING CHANGE` and relax `type-case` for that type.
+There is one example file per type in [`assets/commit-examples/`](assets/commit-examples/), named after the type (`breaking-change.md` for `BREAKING CHANGE`). Read only the one you need.
