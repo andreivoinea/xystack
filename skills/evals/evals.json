@@ -1,0 +1,74 @@
+{
+  "skills": [
+    {
+      "skill_name": "review-with-mode",
+      "evals": [
+        {
+          "id": 1,
+          "name": "micro-code-pagination",
+          "prompt": "You're a reviewer I'm spawning as team lead.\n\nMode: micro\nDepartment: code\nTarget: the PR in files/review-with-mode/pagination-pr/. pr.md is its description and change.diff is its diff against the base project in files/review-with-mode/project/.\nModel slug: claude-opus-5-5\n\nThere's no review interface, so return your findings and completion report to me.",
+          "expected_output": "A High or Critical finding that getPage uses page * perPage with pages numbered from 1, so page 1 skips the newest 20 orders. A High or Critical finding that export-orders.sh runs rm -rf \"$out_dir\"/* without checking the argument, so running it with no argument deletes everything under /. No finding against pageCount, whose ceiling division is correct. No design findings. Verdict: changes requested.",
+          "files": [
+            "files/review-with-mode/project/",
+            "files/review-with-mode/pagination-pr/pr.md",
+            "files/review-with-mode/pagination-pr/change.diff"
+          ],
+          "assertions": [
+            "Reports that getPage computes start = page * perPage although pages are numbered from 1, so page 1 skips the first perPage items",
+            "Rates the getPage finding High or Critical",
+            "Reports that scripts/export-orders.sh runs rm -rf \"$out_dir\"/* without checking that an argument was given, so with no argument it deletes from /",
+            "Rates the export-orders.sh finding High or Critical",
+            "Does not report pageCount's Math.floor((total + perPage - 1) / perPage) as a bug",
+            "Reports no architecture, module-structure or overall-design findings",
+            "Every finding starts with the header [CODE] | By Reviewer Micro (claude-opus-5-5)",
+            "Every finding has Issue, Suggested direction, Severity and Complexity",
+            "The completion report gives the verdict changes requested, a confidence, and the reviewed target or version",
+            "No file under files/review-with-mode/ was modified"
+          ]
+        },
+        {
+          "id": 2,
+          "name": "macro-code-refunds",
+          "prompt": "You're a reviewer I'm spawning as team lead.\n\nMode: macro\nDepartment: code\nTarget: the PR in files/review-with-mode/refunds-pr/. pr.md is its description and change.diff is its diff against the base project in files/review-with-mode/project/.\nModel slug: claude-opus-5-5\n\nThere's no review interface, so return your findings and completion report to me.",
+          "expected_output": "A High or Critical finding that the refund handler imports src/db.ts directly, against the README rule that only services may, and so skips the ownership check in getOrderForUser: any signed-in user can refund another user's order. A finding that it converts money with parseFloat and Math.round instead of toCents, against the README rule, so \"0.285\" refunds 28 cents instead of 29. A lower-severity finding that the PR adds a refund handler, and a handler-to-storage dependency, without updating architecture/workspace.dsl, which the README asks contributors to keep current. The comment typo \"recieve\" is not reported. Verdict: changes requested.",
+          "files": [
+            "files/review-with-mode/project/",
+            "files/review-with-mode/refunds-pr/pr.md",
+            "files/review-with-mode/refunds-pr/change.diff"
+          ],
+          "assertions": [
+            "Reports that src/handlers/refunds.ts imports src/db.ts directly instead of going through src/services/, against the README's layering rule",
+            "Reports that the refund path skips the ownership check, so a user can refund another user's order",
+            "Rates the ownership finding High or Critical",
+            "Reports that the handler converts the amount with floating-point maths instead of reusing toCents from src/money.ts",
+            "Reports that architecture/workspace.dsl isn't updated for the new refund handler, and rates it below the ownership finding",
+            "Does not report the typo \"recieve\" in the handler comment",
+            "Every finding starts with the header [CODE] | By Reviewer Macro (claude-opus-5-5)",
+            "The completion report gives the verdict changes requested",
+            "No file under files/review-with-mode/ was modified"
+          ]
+        },
+        {
+          "id": 3,
+          "name": "inquisitive-code-pagination",
+          "prompt": "You're a reviewer I'm spawning as team lead.\n\nMode: inquisitive\nDepartment: code\nTarget: the PR in files/review-with-mode/pagination-pr/. pr.md is its description and change.diff is its diff against the base project in files/review-with-mode/project/.\nModel slug: claude-opus-5-5\n\nThere's no review interface. The other reviewers' findings are in files/review-with-mode/pagination-pr/findings.md. Return your replies and completion report to me.",
+          "expected_output": "F1 keep: the off-by-one in getPage holds up. F2 drop, with the reviewer's own evidence, e.g. pageCount(10, 5) === 2. F3 needs clarification, with a question about whether a page past the end should be an error. No new findings. Verdict on the reviewed findings: changes requested, because F1 is High.",
+          "files": [
+            "files/review-with-mode/project/",
+            "files/review-with-mode/pagination-pr/"
+          ],
+          "assertions": [
+            "Gives F1 the verdict keep",
+            "Gives F2 the verdict drop, with its own evidence that pageCount is correct when total divides evenly (for example pageCount(10, 5) === 2)",
+            "Gives F3 the verdict needs clarification and asks whether a page past the end should be an error",
+            "Posts no new findings of its own",
+            "Each reply is keyed to its finding ID and has Verdict and Reason",
+            "Every reply starts with the header [CODE] | By Reviewer Inquisitive (claude-opus-5-5)",
+            "The completion report gives the verdict changes requested and says it covers only the reviewed findings",
+            "No file under files/review-with-mode/ was modified"
+          ]
+        }
+      ]
+    }
+  ]
+}

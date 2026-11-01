@@ -1,0 +1,86 @@
+diff --git a/README.md b/README.md
+index 897bf90..b2a915c 100644
+--- a/README.md
++++ b/README.md
+@@ -11,6 +11,10 @@ Order handling for the shop backend.
+ - `scripts/`: maintenance scripts, run from the repository root.
+ - `architecture/workspace.dsl`: the C4 model. Keep it current when you add or change components or their relationships.
+ 
++## Refunds
++
++`POST /orders/:id/refund` with `{ "amount": "12.50" }` refunds part or all of a paid order.
++
+ ## Development
+ 
+ ```sh
+diff --git a/src/handlers/refunds.ts b/src/handlers/refunds.ts
+new file mode 100644
+index 0000000..0fb0565
+--- /dev/null
++++ b/src/handlers/refunds.ts
+@@ -0,0 +1,21 @@
++import * as db from "../db.ts";
++import type { Request, Response } from "../http.ts";
++
++export function handleRefund(request: Request): Response {
++  // Load the order so we can check how much we can recieve back
++  const order = db.findOrder(request.params.id ?? "");
++  if (!order) return { status: 404, body: { error: "order not found" } };
++  if (order.status !== "paid") return { status: 400, body: { error: "only paid orders can be refunded" } };
++
++  const amountCents = Math.round(parseFloat(request.body.amount ?? "") * 100);
++  if (!Number.isFinite(amountCents) || amountCents <= 0) {
++    return { status: 400, body: { error: "invalid amount" } };
++  }
++  if (amountCents > order.totalCents) {
++    return { status: 400, body: { error: "refund exceeds order total" } };
++  }
++
++  db.insertRefund({ orderId: order.id, amountCents, createdAt: new Date().toISOString() });
++  db.updateOrder({ ...order, status: "refunded" });
++  return { status: 200, body: { refunded: amountCents } };
++}
+diff --git a/src/routes.ts b/src/routes.ts
+index e98e5ea..2db7627 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,7 +1,9 @@
+ import { handleDiscount, handleGetOrder } from "./handlers/orders.ts";
++import { handleRefund } from "./handlers/refunds.ts";
+ import type { Handler } from "./http.ts";
+ 
+ export const routes: Record<string, Handler> = {
+   "GET /orders/:id": handleGetOrder,
+   "POST /orders/:id/discount": handleDiscount,
++  "POST /orders/:id/refund": handleRefund,
+ };
+diff --git a/test/refunds.test.ts b/test/refunds.test.ts
+new file mode 100644
+index 0000000..b7dcde3
+--- /dev/null
++++ b/test/refunds.test.ts
+@@ -0,0 +1,24 @@
++import assert from "node:assert/strict";
++import { beforeEach, test } from "node:test";
++import * as db from "../src/db.ts";
++import { handleRefund } from "../src/handlers/refunds.ts";
++import { request, seedOrder } from "./helpers.ts";
++
++beforeEach(() => db.reset());
++
++test("refunds a paid order", () => {
++  seedOrder({ status: "paid" });
++  const response = handleRefund(request({ params: { id: "o1" }, body: { amount: "20" } }));
++  assert.equal(response.status, 200);
++  assert.deepEqual(db.listRefunds("o1").map((refund) => refund.amountCents), [2000]);
++});
++
++test("rejects refunds above the order total", () => {
++  seedOrder({ status: "paid" });
++  assert.equal(handleRefund(request({ params: { id: "o1" }, body: { amount: "50.01" } })).status, 400);
++});
++
++test("rejects refunds for unpaid orders", () => {
++  seedOrder();
++  assert.equal(handleRefund(request({ params: { id: "o1" }, body: { amount: "1" } })).status, 400);
++});

@@ -1,0 +1,220 @@
+diff --git a/architecture/workspace.dsl b/architecture/workspace.dsl
+index 44e56bd..3627112 100644
+--- a/architecture/workspace.dsl
++++ b/architecture/workspace.dsl
+@@ -5,15 +5,17 @@ workspace "orders-api" "Order handling for the shop backend." {
+     model {
+         customer = person "Customer" "Views their orders and applies discounts."
+         operator = person "Operator" "Runs maintenance scripts from the repository root."
++        finance = person "Finance team" "Receives the monthly orders export."
+ 
+         gateway = softwareSystem "Shop gateway" "Hosts the shop's HTTP endpoints and resolves session cookies to user IDs. Separate repository." "External"
+ 
+         orders = softwareSystem "Orders service" "Order handling for the shop backend." {
+             api = container "Orders API" "Order request handlers, loaded and called by the shop gateway. Trusts request.userId, which the gateway sets from the session." "TypeScript, Node.js" {
+-                routes = component "Routes" "src/routes.ts: maps GET /orders/:id and POST /orders/:id/discount to handlers." "TypeScript"
+-                orderHandlers = component "Order handlers" "src/handlers/orders.ts: call the order service, format totals and map errors." "TypeScript"
++                routes = component "Routes" "src/routes.ts: maps GET /orders, GET /orders/:id and POST /orders/:id/discount to handlers." "TypeScript"
++                orderHandlers = component "Order handlers" "src/handlers/orders.ts: call the order service, paginate order history, format totals and map errors." "TypeScript"
+                 errorMapping = component "Error mapping" "src/handlers/errors.ts: maps domain errors to 404 and 400, rethrows the rest." "TypeScript"
+                 orderService = component "Order service" "src/services/orders.ts: business rules for orders, including the ownership check." "TypeScript"
++                pagination = component "Pagination" "src/pagination.ts: splits lists into pages numbered from 1." "TypeScript"
+                 money = component "Money" "src/money.ts: parses decimal strings to whole cents with integer arithmetic, and formats cents." "TypeScript"
+                 storage = component "Storage" "src/db.ts: reads and writes the orders file. Only services may use it." "TypeScript"
+             }
+@@ -21,14 +23,17 @@ workspace "orders-api" "Order handling for the shop backend." {
+             data = container "Orders file" "data/orders.json (or $ORDERS_DB): orders and refunds." "JSON file" "FileStore"
+             backup = container "Backup script" "scripts/backup-db.sh: copies the data directory to a timestamped snapshot." "Bash"
+             backups = container "Backup snapshots" "backups/<UTC timestamp>/" "File system" "FileStore"
++            exportJob = container "Orders export" "scripts/export-orders.sh and scripts/export-orders.ts: write every order to a CSV file." "Bash, TypeScript"
++            exports = container "Export files" "<out-dir>/orders.csv" "CSV file" "FileStore"
+         }
+ 
+         customer -> gateway "Uses the shop through" "HTTPS"
+         gateway -> orders.api.routes "Calls order handlers with the user ID" "Function call"
+-        orders.api.routes -> orders.api.orderHandlers "Dispatches GET /orders/:id and POST /orders/:id/discount to" "In-process call"
++        orders.api.routes -> orders.api.orderHandlers "Dispatches GET /orders, GET /orders/:id and POST /orders/:id/discount to" "In-process call"
+         orders.api.orderHandlers -> orders.api.orderService "Reads and updates the user's orders through" "In-process call"
+         orders.api.orderHandlers -> orders.api.money "Formats totals with" "In-process call"
+         orders.api.orderHandlers -> orders.api.errorMapping "Maps domain errors with" "In-process call"
++        orders.api.orderHandlers -> orders.api.pagination "Paginates order history with" "In-process call"
+         orders.api.orderService -> orders.api.storage "Reads and writes orders through" "In-process call"
+         orders.api.orderService -> orders.api.money "Parses discount amounts with" "In-process call"
+         orders.api.storage -> orders.data "Reads and writes" "File system"
+@@ -36,6 +41,11 @@ workspace "orders-api" "Order handling for the shop backend." {
+         operator -> orders.backup "Runs" "Shell"
+         orders.backup -> orders.data "Reads" "cp -R"
+         orders.backup -> orders.backups "Writes timestamped snapshots to" "cp -R"
++
++        operator -> orders.exportJob "Runs monthly" "Shell"
++        orders.exportJob -> orders.data "Reads all orders through the order service" "File system"
++        orders.exportJob -> orders.exports "Replaces the previous export with" "File system"
++        finance -> orders.exports "Reads" "Spreadsheet"
+     }
+ 
+     views {
+diff --git a/scripts/export-orders.sh b/scripts/export-orders.sh
+new file mode 100755
+index 0000000..a434a3f
+--- /dev/null
++++ b/scripts/export-orders.sh
+@@ -0,0 +1,13 @@
++#!/usr/bin/env bash
++# Exports every order to <out-dir>/orders.csv for the finance team.
++# Usage: scripts/export-orders.sh <out-dir>
++set -eo pipefail
++
++out_dir=$1
++
++# Remove the previous export so finance never picks up stale files.
++rm -rf "$out_dir"/*
++mkdir -p "$out_dir"
++
++npx tsx scripts/export-orders.ts > "$out_dir/orders.csv"
++echo "Exported orders to $out_dir/orders.csv"
+diff --git a/scripts/export-orders.ts b/scripts/export-orders.ts
+new file mode 100644
+index 0000000..b1bd95a
+--- /dev/null
++++ b/scripts/export-orders.ts
+@@ -0,0 +1,7 @@
++import { listAllOrders } from "../src/services/orders.ts";
++
++const header = "id,user_id,total_cents,status,created_at";
++const rows = listAllOrders().map((order) =>
++  [order.id, order.userId, order.totalCents, order.status, order.createdAt].join(","),
++);
++console.log([header, ...rows].join("\n"));
+diff --git a/src/db.ts b/src/db.ts
+index 3939b2e..2038bb9 100644
+--- a/src/db.ts
++++ b/src/db.ts
+@@ -58,6 +58,10 @@ export function updateOrder(order: Order): void {
+   save(data);
+ }
+ 
++export function listOrders(): Order[] {
++  return load().orders;
++}
++
+ export function listOrdersByUser(userId: string): Order[] {
+   return load()
+     .orders.filter((order) => order.userId === userId)
+diff --git a/src/handlers/orders.ts b/src/handlers/orders.ts
+index 52446fb..0a80295 100644
+--- a/src/handlers/orders.ts
++++ b/src/handlers/orders.ts
+@@ -1,8 +1,11 @@
+ import type { Request, Response } from "../http.ts";
+ import { formatCents } from "../money.ts";
++import { getPage } from "../pagination.ts";
+ import * as orders from "../services/orders.ts";
+ import { errorResponse } from "./errors.ts";
+ 
++const ORDERS_PER_PAGE = 20;
++
+ export function handleGetOrder(request: Request): Response {
+   try {
+     const order = orders.getOrderForUser(request.params.id ?? "", request.userId);
+@@ -20,3 +23,15 @@ export function handleDiscount(request: Request): Response {
+     return errorResponse(error);
+   }
+ }
++
++export function handleListOrders(request: Request): Response {
++  try {
++    const page = getPage(orders.listOrdersForUser(request.userId), Number(request.query.page ?? "1"), ORDERS_PER_PAGE);
++    return {
++      status: 200,
++      body: { ...page, items: page.items.map((order) => ({ ...order, total: formatCents(order.totalCents) })) },
++    };
++  } catch (error) {
++    return errorResponse(error);
++  }
++}
+diff --git a/src/pagination.ts b/src/pagination.ts
+new file mode 100644
+index 0000000..f8cdf84
+--- /dev/null
++++ b/src/pagination.ts
+@@ -0,0 +1,25 @@
++import { ValidationError } from "./errors.ts";
++
++export interface Page<T> {
++  items: T[];
++  page: number;
++  pages: number;
++}
++
++/** Returns how many pages are needed to show `total` items. */
++export function pageCount(total: number, perPage: number): number {
++  if (perPage <= 0) throw new ValidationError("perPage must be positive");
++  return Math.floor((total + perPage - 1) / perPage);
++}
++
++/** Returns the items on `page`. Pages are numbered from 1. */
++export function getPage<T>(items: T[], page: number, perPage: number): Page<T> {
++  if (perPage <= 0) throw new ValidationError("perPage must be positive");
++  if (!Number.isInteger(page) || page < 1) throw new ValidationError("page must be a whole number from 1");
++  const start = page * perPage;
++  return {
++    items: items.slice(start, start + perPage),
++    page,
++    pages: pageCount(items.length, perPage),
++  };
++}
+diff --git a/src/routes.ts b/src/routes.ts
+index e98e5ea..ed17f67 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -1,7 +1,8 @@
+-import { handleDiscount, handleGetOrder } from "./handlers/orders.ts";
++import { handleDiscount, handleGetOrder, handleListOrders } from "./handlers/orders.ts";
+ import type { Handler } from "./http.ts";
+ 
+ export const routes: Record<string, Handler> = {
++  "GET /orders": handleListOrders,
+   "GET /orders/:id": handleGetOrder,
+   "POST /orders/:id/discount": handleDiscount,
+ };
+diff --git a/src/services/orders.ts b/src/services/orders.ts
+index eadfd65..397fab5 100644
+--- a/src/services/orders.ts
++++ b/src/services/orders.ts
+@@ -13,6 +13,10 @@ export function listOrdersForUser(userId: string): db.Order[] {
+   return db.listOrdersByUser(userId);
+ }
+ 
++export function listAllOrders(): db.Order[] {
++  return db.listOrders();
++}
++
+ export function applyDiscount(orderId: string, userId: string, amount: string): db.Order {
+   const order = getOrderForUser(orderId, userId);
+   if (order.status !== "pending") throw new ValidationError("only pending orders can be discounted");
+diff --git a/test/pagination.test.ts b/test/pagination.test.ts
+new file mode 100644
+index 0000000..a2d0216
+--- /dev/null
++++ b/test/pagination.test.ts
+@@ -0,0 +1,20 @@
++import assert from "node:assert/strict";
++import { test } from "node:test";
++import { getPage, pageCount } from "../src/pagination.ts";
++
++test("pageCount rounds up", () => {
++  assert.equal(pageCount(11, 5), 3);
++  assert.equal(pageCount(10, 5), 2);
++  assert.equal(pageCount(0, 5), 0);
++});
++
++test("getPage returns at most perPage items", () => {
++  const items = Array.from({ length: 12 }, (_, i) => i);
++  assert.equal(getPage(items, 1, 5).items.length, 5);
++  assert.equal(getPage(items, 1, 5).pages, 3);
++});
++
++test("getPage rejects page 0 and fractions", () => {
++  assert.throws(() => getPage([1, 2, 3], 0, 2));
++  assert.throws(() => getPage([1, 2, 3], 1.5, 2));
++});

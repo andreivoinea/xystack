@@ -3,9 +3,7 @@ skills_install_help() {
 Usage: xystack skills install [options]
        xystack skills i [options]
 
-Install every skill (a folder containing SKILL.md) found under the xystack
-skills folder, including skills nested in organizational folders.
-Skills that are already installed are skipped.
+Install all xystack skills. Skips skills already present.
 
 Options:
   -g, --global            Install to \$HOME/.agents/skills and \$HOME/.claude/skills (default)
@@ -19,9 +17,7 @@ skills_clean_install_help() {
 Usage: xystack skills clean-install [options]
        xystack skills ci [options]
 
-Install every skill (a folder containing SKILL.md) found under the xystack
-skills folder, including skills nested in organizational folders.
-Skills that are already installed are replaced.
+Install all xystack skills. Replaces skills already present.
 
 Options:
   -g, --global            Install to \$HOME/.agents/skills and \$HOME/.claude/skills (default)
