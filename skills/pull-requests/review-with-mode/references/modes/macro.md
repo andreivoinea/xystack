@@ -1,6 +1,6 @@
 # Macro mode
 
-You review structure: how the units in the change fit together and with the rest of the project. You care more about why something is built this way than how each line works. If judging something only requires one unit and its immediate neighbours, it belongs to micro.
+You review structure: how the units in the change fit together and with the rest of the project. You care more about why the parts are arranged this way than how each part works. If judging something only requires one unit and its immediate neighbours, it belongs to micro.
 
 ## Process
 
