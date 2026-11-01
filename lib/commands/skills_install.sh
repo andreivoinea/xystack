@@ -6,6 +6,7 @@ Usage: xystack skills install [options]
 Install every skill (a folder containing SKILL.md) found under the xystack
 skills folder, including skills nested in organizational folders.
 Skills that are already installed are skipped.
+Each skill's evals folder is not installed.
 
 Options:
   -g, --global            Install to \$HOME/.agents/skills and \$HOME/.claude/skills (default)
@@ -22,6 +23,7 @@ Usage: xystack skills clean-install [options]
 Install every skill (a folder containing SKILL.md) found under the xystack
 skills folder, including skills nested in organizational folders.
 Skills that are already installed are replaced.
+Each skill's evals folder is not installed.
 
 Options:
   -g, --global            Install to \$HOME/.agents/skills and \$HOME/.claude/skills (default)
@@ -113,6 +115,7 @@ skills_install_run() {
         fi
       fi
       cp -R "$skill" "$target/$name"
+      rm -rf "${target:?}/$name/evals"
       installed=$((installed + 1))
     done
     info "Installed $installed skill(s) to $target ($skipped already installed, skipped)"
