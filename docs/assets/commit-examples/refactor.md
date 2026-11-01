@@ -1,5 +1,5 @@
 # refactor
 
 ```
-refactor(skills): load review modes by file name
+refactor(skills): Load review modes by file name
 ```

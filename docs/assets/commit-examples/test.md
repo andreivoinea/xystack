@@ -1,5 +1,5 @@
 # test
 
 ```
-test(installer): cover skill names containing line breaks
+test(installer): Cover skill names containing line breaks
 ```

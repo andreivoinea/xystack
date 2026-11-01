@@ -1,5 +1,5 @@
 # chore
 
 ```
-chore: remove unused .gitkeep
+chore: Remove unused .gitkeep
 ```

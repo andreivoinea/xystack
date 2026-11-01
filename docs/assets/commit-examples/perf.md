@@ -1,5 +1,5 @@
 # perf
 
 ```
-perf(installer): copy skills in one pass instead of per file
+perf(installer): Copy skills in one pass instead of per file
 ```

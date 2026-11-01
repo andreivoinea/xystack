@@ -1,5 +1,5 @@
 # docs
 
 ```
-docs: add commit standards
+docs: Add commit standards
 ```

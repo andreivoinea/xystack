@@ -1,5 +1,5 @@
 # ci
 
 ```
-ci: run shellcheck on pull requests
+ci: Run shellcheck on pull requests
 ```

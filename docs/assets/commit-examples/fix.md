@@ -1,5 +1,5 @@
 # fix
 
 ```
-fix(installer): skip symlinked skill folders
+fix(installer): Skip symlinked skill folders
 ```

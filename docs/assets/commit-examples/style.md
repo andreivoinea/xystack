@@ -1,5 +1,5 @@
 # style
 
 ```
-style(installer): align case statements
+style(installer): Align case statements
 ```

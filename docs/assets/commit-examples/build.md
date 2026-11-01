@@ -1,5 +1,5 @@
 # build
 
 ```
-build: pin shellcheck to 0.10.0
+build: Pin shellcheck to 0.10.0
 ```
