@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copies the data directory to backups/<timestamp>/. Use from the repository root.
+# Copies the data directory (orders.json) to backups/<timestamp>/. Use from the repository root.
 set -euo pipefail
 
 data_dir="${DATA_DIR:-data}"

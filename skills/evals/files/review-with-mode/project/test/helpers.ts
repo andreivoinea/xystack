@@ -1,5 +1,9 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as db from "../src/db.ts";
 import type { Request } from "../src/http.ts";
+
+process.env.ORDERS_DB = join(tmpdir(), `orders-api-test-${process.pid}.json`);
 
 export function seedOrder(overrides: Partial<db.Order> = {}): db.Order {
   const order: db.Order = {
