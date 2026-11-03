@@ -1,0 +1,123 @@
+{
+  "skill_name": "review-with-mode",
+  "name": "refunds",
+  "skill_path": "pull-requests/review-with-mode",
+  "base": "files/review-with-mode/project",
+  "fixtures": "files/review-with-mode/refunds-pr",
+  "reviewers": [
+    "micro",
+    "macro",
+    "inquisitive"
+  ],
+  "revisions": [
+    {
+      "id": "v1",
+      "diff": "change.diff"
+    },
+    {
+      "id": "v2",
+      "diff": "change-v2.diff",
+      "note": "Moved the refund logic into a new refund service that goes through getOrderForUser and toCents. The handler is now a one-liner."
+    }
+  ],
+  "author": {
+    "stances": [
+      {
+        "issue": "missing ownership check / refunding another user's order",
+        "reply": "Fixed in v2: the new refund service calls getOrderForUser. Added a test that mallory gets a 404."
+      },
+      {
+        "issue": "handler importing db.ts / business rules in the handler",
+        "reply": "Fixed in v2: the rules live in src/services/refunds.ts and the handler only calls it."
+      },
+      {
+        "issue": "parseFloat and Math.round instead of toCents (h-1 or any other thread)",
+        "reply": "Fixed in v2: the service uses toCents. Added a test that 0.285 refunds 29 cents."
+      },
+      {
+        "issue": "insertRefund and updateOrder being separate, non-atomic writes",
+        "reply": "The JSON file store is going away when we move to Postgres next quarter, so I don't want to add storage functions to it now. Won't fix."
+      },
+      {
+        "issue": "architecture/workspace.dsl not updated",
+        "reply": "I'd rather update the model in a follow-up once the refund design settles."
+      },
+      {
+        "issue": "the typo \"recieve\"",
+        "reply": "Gone in v2: the handler was rewritten without that comment."
+      }
+    ],
+    "default": "Say it isn't addressed in v2 and ask whether it blocks the merge."
+  },
+  "rulings": [
+    {
+      "at": "after-author",
+      "thread": "any thread about architecture/workspace.dsl",
+      "if": "always",
+      "status": "accepted",
+      "comment": "Fine to do in a follow-up. Accepted for this PR."
+    },
+    {
+      "at": "round-2",
+      "thread": "the thread about non-atomic insertRefund/updateOrder writes",
+      "if": "it was escalated to the team lead",
+      "status": "accepted",
+      "comment": "Accepted for this PR; the Postgres move will make the refund a single transaction."
+    },
+    {
+      "at": "round-2",
+      "thread": "h-1",
+      "if": "a reviewer confirmed the fix in v2",
+      "status": "fixed",
+      "comment": "Closing as fixed: v2 uses toCents."
+    },
+    {
+      "at": "round-2",
+      "thread": "any other thread escalated to the team lead",
+      "if": "it was escalated",
+      "status": "keep",
+      "comment": "No ruling scripted; log the escalation in the run notes and leave the thread as it is."
+    }
+  ],
+  "grades": {
+    "initial": {
+      "after": "round 1, after the team lead's round-1 rulings",
+      "expected_output": "Macro reports, High or Critical, that the refund handler imports db.ts directly against the README's layering and so skips getOrderForUser's ownership check: any signed-in user can refund another user's order. Macro reports the missing workspace.dsl update below the ownership finding. Money conversion evidence goes on Dana's h-1 instead of a new thread. Any non-atomic-writes finding is Medium or Low. Macro doesn't report the typo \"recieve\"; micro may, as Low. Inquisitive keeps the ownership and h-1 findings. Verdicts: changes requested, for v1.",
+      "assertions": [
+        "A macro thread reports that src/handlers/refunds.ts imports src/db.ts directly instead of going through src/services/, against the README's layering rule",
+        "A thread reports that the refund path skips the ownership check, so a user can refund another user's order, and rates it High or Critical",
+        "No reviewer opens a new thread about parseFloat or Math.round instead of toCents; any such evidence is added to h-1",
+        "A macro thread reports that architecture/workspace.dsl isn't updated for the refund handler, rated below the ownership finding",
+        "Any thread about insertRefund and updateOrder being separate, non-atomic writes is rated Medium or Low",
+        "Macro doesn't report the typo \"recieve\"",
+        "Any micro thread about the typo \"recieve\" is rated Low",
+        "Micro reports no layering, module-structure or architecture-model findings",
+        "Inquisitive keeps the ownership thread and h-1",
+        "Inquisitive opens no threads of its own",
+        "Every challenge inquisitive posts on a micro or macro thread gets a response from that thread's owner: withdrawal with a reason, one reply with new evidence, or an escalation to the team lead",
+        "Every comment by a reviewer starts with the header [CODE] | By Reviewer <Mode> (eval-model) for its own mode",
+        "Every micro and macro thread has Issue, Suggested direction, Severity and Complexity",
+        "Reviewers change the status only of their own threads",
+        "Macro's round-1 completion report gives the verdict changes requested and names v1 as the reviewed revision",
+        "The check step reports target/ unchanged"
+      ]
+    },
+    "final": {
+      "after": "round 2, after the team lead's round-2 rulings",
+      "expected_output": "The owners close the ownership and layering threads as fixed, after checking that another user gets 404 and the handler no longer imports db.ts. Nobody argues the workspace.dsl update after the team lead accepted the follow-up. On the non-atomic-writes thread, its owner replies once with new evidence or a settling check (the double refund stays reachable until the Postgres move ships) or escalates; it isn't closed as fixed. Macro reports, Low or Medium, that src/services/refunds.ts imports errorResponse from src/handlers/errors.ts and returns HTTP responses, so services now depend on the HTTP layer. Reports name v2 and say the round covered the changes since v1 and the open threads. Macro's verdict: no blocking findings, unless it has an open High or Critical thread.",
+      "assertions": [
+        "The ownership thread is closed as fixed by its owner",
+        "The layering thread is closed as fixed by its owner",
+        "No reviewer argues for the workspace.dsl update after the team lead accepted the follow-up",
+        "The non-atomic-writes thread, if there is one, isn't closed as fixed; its owner either replies once with new evidence or a check that would settle it, or escalates to the team lead",
+        "A macro thread reports that src/services/refunds.ts imports from src/handlers/ or returns HTTP responses, so the service layer depends on the HTTP layer, and rates it Low or Medium",
+        "No reviewer reopens or re-argues a thread the team lead ruled on",
+        "In round 2, no reviewer opens a new thread about an issue that already has a thread",
+        "Every comment by a reviewer in round 2 starts with the header [CODE] | By Reviewer <Mode> (eval-model) for its own mode",
+        "Micro's and macro's round-2 completion reports name v2 as the reviewed revision and say the round covered the changes since v1 and the open threads, not a full re-review",
+        "Each reviewer's last verdict follows its own open threads: changes requested only if one is High or Critical",
+        "The check step reports target/ unchanged"
+      ]
+    }
+  }
+}
