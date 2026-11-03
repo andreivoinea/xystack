@@ -1,0 +1,79 @@
+diff --git a/scripts/export-orders.sh b/scripts/export-orders.sh
+index a434a3f..53eb139 100755
+--- a/scripts/export-orders.sh
++++ b/scripts/export-orders.sh
+@@ -3,7 +3,11 @@
+ # Usage: scripts/export-orders.sh <out-dir>
+ set -eo pipefail
+ 
+-out_dir=$1
++out_dir=${1:-}
++if [ -z "$out_dir" ]; then
++  echo "Usage: scripts/export-orders.sh <out-dir>" >&2
++  exit 1
++fi
+ 
+ # Remove the previous export so finance never picks up stale files.
+ rm -rf "$out_dir"/*
+diff --git a/src/handlers/orders.ts b/src/handlers/orders.ts
+index 0a80295..d8a482b 100644
+--- a/src/handlers/orders.ts
++++ b/src/handlers/orders.ts
+@@ -1,6 +1,6 @@
+ import type { Request, Response } from "../http.ts";
+ import { formatCents } from "../money.ts";
+-import { getPage } from "../pagination.ts";
++import { getPage, pageCount } from "../pagination.ts";
+ import * as orders from "../services/orders.ts";
+ import { errorResponse } from "./errors.ts";
+ 
+@@ -26,7 +26,10 @@ export function handleDiscount(request: Request): Response {
+ 
+ export function handleListOrders(request: Request): Response {
+   try {
+-    const page = getPage(orders.listOrdersForUser(request.userId), Number(request.query.page ?? "1"), ORDERS_PER_PAGE);
++    const all = orders.listOrdersForUser(request.userId);
++    // A page past the end shows the last page instead of an empty list.
++    const requested = Math.min(Number(request.query.page ?? "1"), pageCount(all.length, ORDERS_PER_PAGE));
++    const page = getPage(all, requested, ORDERS_PER_PAGE);
+     return {
+       status: 200,
+       body: { ...page, items: page.items.map((order) => ({ ...order, total: formatCents(order.totalCents) })) },
+diff --git a/src/pagination.ts b/src/pagination.ts
+index f8cdf84..88da44d 100644
+--- a/src/pagination.ts
++++ b/src/pagination.ts
+@@ -9,14 +9,14 @@ export interface Page<T> {
+ /** Returns how many pages are needed to show `total` items. */
+ export function pageCount(total: number, perPage: number): number {
+   if (perPage <= 0) throw new ValidationError("perPage must be positive");
+-  return Math.floor((total + perPage - 1) / perPage);
++  return Math.ceil(total / perPage);
+ }
+ 
+ /** Returns the items on `page`. Pages are numbered from 1. */
+ export function getPage<T>(items: T[], page: number, perPage: number): Page<T> {
+   if (perPage <= 0) throw new ValidationError("perPage must be positive");
+   if (!Number.isInteger(page) || page < 1) throw new ValidationError("page must be a whole number from 1");
+-  const start = page * perPage;
++  const start = (page - 1) * perPage;
+   return {
+     items: items.slice(start, start + perPage),
+     page,
+diff --git a/test/pagination.test.ts b/test/pagination.test.ts
+index a2d0216..f0b61fa 100644
+--- a/test/pagination.test.ts
++++ b/test/pagination.test.ts
+@@ -14,6 +14,12 @@ test("getPage returns at most perPage items", () => {
+   assert.equal(getPage(items, 1, 5).pages, 3);
+ });
+ 
++test("getPage starts page 1 at the first item", () => {
++  const items = Array.from({ length: 12 }, (_, i) => i);
++  assert.deepEqual(getPage(items, 1, 5).items, [0, 1, 2, 3, 4]);
++  assert.deepEqual(getPage(items, 3, 5).items, [10, 11]);
++});
++
+ test("getPage rejects page 0 and fractions", () => {
+   assert.throws(() => getPage([1, 2, 3], 0, 2));
+   assert.throws(() => getPage([1, 2, 3], 1.5, 2));
